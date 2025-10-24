@@ -22,26 +22,52 @@ jobs:
       run: |
         cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -Dgearmulator_BUILD_JUCEPLUGIN=ON -Dgearmulator_SYNTH_OSTIRUS=ON -Dgearmulator_BUILD_JUCEPLUGIN_CLAP=OFF -Dgearmulator_BUILD_JUCEPLUGIN_LV2=OFF -Dgearmulator_BUILD_FX_PLUGIN=OFF -G "Visual Studio 17 2022"
         echo "CMake configuration completed"
-        dir ${{github.workspace}}/build/
 
     - name: Build OsTIrus VST3
       run: |
         cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}} --parallel 3
         echo "Build completed"
-        dir ${{github.workspace}}/build/
 
     - name: Find VST3 files
       run: |
         echo "Looking for VST3 files..."
         Get-ChildItem -Path ${{github.workspace}}/build -Recurse -Filter "*.vst3" | ForEach-Object { Write-Host "Found VST3: $($_.FullName)" }
         Get-ChildItem -Path ${{github.workspace}}/build -Recurse -Filter "*OsTIrus*" | ForEach-Object { Write-Host "Found OsTIrus file: $($_.FullName)" }
+        Get-ChildItem -Path ${{github.workspace}}/build/x64 -Recurse | ForEach-Object { Write-Host "Found in x64: $($_.FullName)" }
+
+    - name: Create VST3 package manually
+      run: |
+        $vst3Files = Get-ChildItem -Path ${{github.workspace}}/build -Recurse -Filter "*.vst3"
+        if ($vst3Files.Count -gt 0) {
+          Write-Host "Found $($vst3Files.Count) VST3 files"
+          foreach ($file in $vst3Files) {
+            Write-Host "VST3 file: $($file.FullName)"
+            # Copy to a central location for packaging
+            Copy-Item $file.FullName ${{github.workspace}}/build/
+          }
+        } else {
+          Write-Host "No VST3 files found, checking for other plugin formats..."
+          Get-ChildItem -Path ${{github.workspace}}/build -Recurse -Filter "*.dll" | ForEach-Object { Write-Host "Found DLL: $($_.FullName)" }
+        }
 
     - name: Package OsTIrus VST3
       working-directory: ${{github.workspace}}/build
       run: |
-        cpack -G ZIP -C ${{env.BUILD_TYPE}} -D CPACK_GENERATOR=ZIP -D CPACK_ARCHIVE_COMPONENT_INSTALL=ON -D CPACK_COMPONENTS_ALL="OsTIrusJucePlugin"
+        # Try CPack first
+        cpack -G ZIP -C ${{env.BUILD_TYPE}} -D CPACK_GENERATOR=ZIP -D CPACK_ARCHIVE_COMPONENT_INSTALL=ON -D CPACK_COMPONENTS_ALL="OsTIrusJucePlugin" || echo "CPack failed, trying manual packaging"
+        
+        # If CPack fails, create a manual zip
+        if (-not (Test-Path "*.zip")) {
+          Write-Host "Creating manual package..."
+          $vst3Files = Get-ChildItem -Recurse -Filter "*.vst3"
+          if ($vst3Files.Count -gt 0) {
+            Compress-Archive -Path $vst3Files.FullName -DestinationPath "ostirus-vst3-manual.zip"
+            Write-Host "Created manual package: ostirus-vst3-manual.zip"
+          }
+        }
+        
         echo "Packaging completed"
-        dir *.zip
+        Get-ChildItem *.zip
 
     - name: Upload VST3 Artifact
       uses: actions/upload-artifact@v4
