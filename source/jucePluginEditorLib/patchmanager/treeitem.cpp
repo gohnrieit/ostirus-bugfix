@@ -161,7 +161,17 @@ namespace jucePluginEditorLib::patchManager
 
 	void TreeItem::processSearchUpdated(const pluginLib::patchDB::Search& _search)
 	{
-		setCount(static_cast<uint32_t>(_search.getResultSize()));
+		const auto resultSize = _search.getResultSize();
+		// Prevent overflow when casting size_t to uint32_t
+		// If the result size is too large, set it to unknown count instead of overflowing
+		if (resultSize >= g_unknownCount)
+		{
+			setCount(g_unknownCount);
+		}
+		else
+		{
+			setCount(static_cast<uint32_t>(resultSize));
+		}
 	}
 
 	const pluginLib::patchDB::SearchRequest& TreeItem::getParentSearchRequest() const
