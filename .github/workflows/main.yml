@@ -18,6 +18,21 @@ jobs:
     - name: Set up MSVC compiler
       uses: ilammy/msvc-dev-cmd@v1
 
+    - name: Fix chrono issues in dspthread.cpp
+      run: |
+        $filePath = "${{github.workspace}}/source/dsp56300/source/dsp56kEmu/dspthread.cpp"
+        if (Test-Path $filePath) {
+          $content = Get-Content $filePath -Raw
+          # Replace high_resolution_clock with steady_clock which is more widely supported
+          $content = $content -replace 'high_resolution_clock', 'steady_clock'
+          # Add chrono include if not present
+          if ($content -notmatch '#include\s*<chrono>') {
+            $content = $content -replace '(#include\s*<[^>]+>)', '$1`n#include <chrono>'
+          }
+          Set-Content $filePath $content
+          Write-Host "Fixed chrono issues in dspthread.cpp"
+        }
+
     - name: Configure CMake for OsTIrus VST3
       run: |
         cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -Dgearmulator_BUILD_JUCEPLUGIN=ON -Dgearmulator_SYNTH_OSTIRUS=ON -Dgearmulator_BUILD_JUCEPLUGIN_CLAP=OFF -Dgearmulator_BUILD_JUCEPLUGIN_LV2=OFF -Dgearmulator_BUILD_FX_PLUGIN=OFF -G "Visual Studio 17 2022" -DCMAKE_CXX_STANDARD=11 -DCMAKE_CXX_FLAGS="/permissive- /Zc:__cplusplus /EHsc"
