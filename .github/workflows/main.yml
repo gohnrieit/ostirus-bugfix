@@ -1,0 +1,35 @@
+name: Build OsTIrus VST3 with Bug Fix
+
+on:
+  workflow_dispatch:
+
+env:
+  BUILD_TYPE: Release
+
+jobs:
+  build-windows-vst3:
+    runs-on: windows-2019
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: "recursive"
+        ref: fix-categories-count-bug
+
+    - name: Set up MSVC compiler
+      uses: ilammy/msvc-dev-cmd@v1
+
+    - name: Configure CMake for OsTIrus VST3
+      run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -Dgearmulator_BUILD_JUCEPLUGIN=ON -Dgearmulator_SYNTH_OSTIRUS=ON -Dgearmulator_BUILD_JUCEPLUGIN_CLAP=OFF -Dgearmulator_BUILD_JUCEPLUGIN_LV2=OFF -Dgearmulator_BUILD_FX_PLUGIN=OFF
+
+    - name: Build OsTIrus VST3
+      run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}} --target OsTIrusJucePlugin --parallel 3
+
+    - name: Package OsTIrus VST3
+      working-directory: ${{github.workspace}}/build
+      run: cpack -G ZIP -C ${{env.BUILD_TYPE}} -D CPACK_GENERATOR=ZIP -D CPACK_ARCHIVE_COMPONENT_INSTALL=ON -D CPACK_COMPONENTS_ALL="OsTIrusJucePlugin"
+
+    - name: Upload VST3 Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ostirus-vst3-windows
+        path: ${{github.workspace}}/build/*.zip
