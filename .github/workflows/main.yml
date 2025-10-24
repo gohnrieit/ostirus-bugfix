@@ -19,14 +19,23 @@ jobs:
       uses: ilammy/msvc-dev-cmd@v1
 
     - name: Configure CMake for OsTIrus VST3
-      run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -Dgearmulator_BUILD_JUCEPLUGIN=ON -Dgearmulator_SYNTH_OSTIRUS=ON -Dgearmulator_BUILD_JUCEPLUGIN_CLAP=OFF -Dgearmulator_BUILD_JUCEPLUGIN_LV2=OFF -Dgearmulator_BUILD_FX_PLUGIN=OFF
+      run: |
+        cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -Dgearmulator_BUILD_JUCEPLUGIN=ON -Dgearmulator_SYNTH_OSTIRUS=ON -Dgearmulator_BUILD_JUCEPLUGIN_CLAP=OFF -Dgearmulator_BUILD_JUCEPLUGIN_LV2=OFF -Dgearmulator_BUILD_FX_PLUGIN=OFF -G "Visual Studio 17 2022"
+        echo "CMake configuration completed"
+        ls -la ${{github.workspace}}/build/
 
     - name: Build OsTIrus VST3
-      run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}} --target OsTIrusJucePlugin --parallel 3
+      run: |
+        cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}} --target OsTIrusJucePlugin --parallel 3
+        echo "Build completed"
+        ls -la ${{github.workspace}}/build/
 
     - name: Package OsTIrus VST3
       working-directory: ${{github.workspace}}/build
-      run: cpack -G ZIP -C ${{env.BUILD_TYPE}} -D CPACK_GENERATOR=ZIP -D CPACK_ARCHIVE_COMPONENT_INSTALL=ON -D CPACK_COMPONENTS_ALL="OsTIrusJucePlugin"
+      run: |
+        cpack -G ZIP -C ${{env.BUILD_TYPE}} -D CPACK_GENERATOR=ZIP -D CPACK_ARCHIVE_COMPONENT_INSTALL=ON -D CPACK_COMPONENTS_ALL="OsTIrusJucePlugin"
+        echo "Packaging completed"
+        ls -la *.zip
 
     - name: Upload VST3 Artifact
       uses: actions/upload-artifact@v4
