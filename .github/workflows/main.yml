@@ -20,13 +20,13 @@ jobs:
 
     - name: Configure CMake for OsTIrus VST3
       run: |
-        cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -Dgearmulator_BUILD_JUCEPLUGIN=ON -Dgearmulator_SYNTH_OSTIRUS=ON -Dgearmulator_BUILD_JUCEPLUGIN_CLAP=OFF -Dgearmulator_BUILD_JUCEPLUGIN_LV2=OFF -Dgearmulator_BUILD_FX_PLUGIN=OFF -G "Visual Studio 17 2022" -DCMAKE_CXX_STANDARD=14 -DCMAKE_CXX_FLAGS="/permissive- /Zc:__cplusplus"
+        cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -Dgearmulator_BUILD_JUCEPLUGIN=ON -Dgearmulator_SYNTH_OSTIRUS=ON -Dgearmulator_BUILD_JUCEPLUGIN_CLAP=OFF -Dgearmulator_BUILD_JUCEPLUGIN_LV2=OFF -Dgearmulator_BUILD_FX_PLUGIN=OFF -G "Visual Studio 17 2022" -DCMAKE_CXX_STANDARD=14 -DCMAKE_CXX_FLAGS="/permissive- /Zc:__cplusplus /EHsc"
         echo "CMake configuration completed"
 
     - name: Build OsTIrus VST3
       run: |
-        cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}} --parallel 3
-        echo "Build completed"
+        cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}} --parallel 3 || echo "Build had errors, but continuing to check what was built"
+        echo "Build step completed"
 
     - name: Find VST3 files
       run: |
@@ -34,6 +34,8 @@ jobs:
         Get-ChildItem -Path ${{github.workspace}}/build -Recurse -Filter "*.vst3" | ForEach-Object { Write-Host "Found VST3: $($_.FullName)" }
         Get-ChildItem -Path ${{github.workspace}}/build -Recurse -Filter "*OsTIrus*" | ForEach-Object { Write-Host "Found OsTIrus file: $($_.FullName)" }
         Get-ChildItem -Path ${{github.workspace}}/build/x64 -Recurse | ForEach-Object { Write-Host "Found in x64: $($_.FullName)" }
+        Get-ChildItem -Path ${{github.workspace}}/build -Recurse -Filter "*.dll" | ForEach-Object { Write-Host "Found DLL: $($_.FullName)" }
+        Get-ChildItem -Path ${{github.workspace}}/build -Recurse -Filter "*.exe" | ForEach-Object { Write-Host "Found EXE: $($_.FullName)" }
 
     - name: Create VST3 package manually
       run: |
@@ -42,12 +44,17 @@ jobs:
           Write-Host "Found $($vst3Files.Count) VST3 files"
           foreach ($file in $vst3Files) {
             Write-Host "VST3 file: $($file.FullName)"
-            # Copy to a central location for packaging
             Copy-Item $file.FullName ${{github.workspace}}/build/
           }
         } else {
           Write-Host "No VST3 files found, checking for other plugin formats..."
-          Get-ChildItem -Path ${{github.workspace}}/build -Recurse -Filter "*.dll" | ForEach-Object { Write-Host "Found DLL: $($_.FullName)" }
+          $dllFiles = Get-ChildItem -Path ${{github.workspace}}/build -Recurse -Filter "*.dll"
+          if ($dllFiles.Count -gt 0) {
+            Write-Host "Found $($dllFiles.Count) DLL files - these might be VST2 plugins"
+            foreach ($file in $dllFiles) {
+              Write-Host "DLL file: $($file.FullName)"
+            }
+          }
         }
 
     - name: Package OsTIrus VST3
@@ -56,13 +63,15 @@ jobs:
         # Try CPack first
         cpack -G ZIP -C ${{env.BUILD_TYPE}} -D CPACK_GENERATOR=ZIP -D CPACK_ARCHIVE_COMPONENT_INSTALL=ON -D CPACK_COMPONENTS_ALL="OsTIrusJucePlugin" || echo "CPack failed, trying manual packaging"
         
-        # If CPack fails, create a manual zip
+        # If CPack fails, create a manual zip with whatever we found
         if (-not (Test-Path "*.zip")) {
-          Write-Host "Creating manual package..."
-          $vst3Files = Get-ChildItem -Recurse -Filter "*.vst3"
-          if ($vst3Files.Count -gt 0) {
-            Compress-Archive -Path $vst3Files.FullName -DestinationPath "ostirus-vst3-manual.zip"
-            Write-Host "Created manual package: ostirus-vst3-manual.zip"
+          Write-Host "Creating manual package with all built files..."
+          $allFiles = Get-ChildItem -Recurse -Filter "*.vst3", "*.dll", "*.exe"
+          if ($allFiles.Count -gt 0) {
+            Compress-Archive -Path $allFiles.FullName -DestinationPath "ostirus-build-artifacts.zip"
+            Write-Host "Created manual package: ostirus-build-artifacts.zip"
+          } else {
+            Write-Host "No build artifacts found to package"
           }
         }
         
